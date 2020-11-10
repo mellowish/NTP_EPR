@@ -8,7 +8,7 @@ geocodes <- read.csv("/Volumes/PEGS/Data_Freezes/freeze_v1/GIS/geo_addresses_01o
 #names of dataset
 names(geocodes)
 geocodes$state <- as.factor(geocodes$geo_state)
-#they have a weird structure - make sure everything is correct in the 
+#they have a weird structure - make sure everything is correct in the state column especially
 geocodes$state <- ifelse((geocodes$geo_state == "SKIPPED" | geocodes$geo_state == "AE"), NA, geocodes$geo_state)
 geocodes$state <- as.factor(ifelse(geocodes$state == "MISSING", NA, geocodes$state))
 
@@ -29,8 +29,11 @@ library(rgdal)
 library(sp)
 library(sf)
 library(rgeos)
+
+#remove missing addresses
 geocodes2 <- subset(geocodes, !is.na(geocodes$longitude)) #12448
 
+#convert to spatial files
 geocodes2 <- st_as_sf(geocodes2, coords = c('longitude','latitude'), crs ="+proj=longlat +datum=NAD83 +no_defs")
 
 geocodes2 <- sf:::as_Spatial(geocodes2)
@@ -39,6 +42,7 @@ geocodes2 <- sf:::as_Spatial(geocodes2)
 
 geocodes3 <- geocodes2 
 
+#pull all of the census tract files for each state
 folders1 <- list.files(path="~/Downloads/censustracts/", all.files=T)[5:59]
 geocodest <- NA
 
@@ -70,6 +74,7 @@ for (i in 1:55){
   geocodest <- rbind(geocodest, geocodesx)
 }
 
+#check how many need to be added by hand
 completed_id <- unique(geocodest$epr_number)
 all_id <- unique(geocodes3@data$epr_number)
 
@@ -79,34 +84,38 @@ miss_check <- subset(geocodes3, geocodes3@data$epr_number %in% missing_id)
 
 miss_check2 <- as.data.frame(miss_check)
 
-write.csv(geocodest, file ="~/Desktop/EPR_geocodes_censustract.csv")
-write.csv(miss_check2, file="~/Desktop/EPR_geocodes_nocensustract.csv")
+write.csv(geocodest, file ="~/Desktop/EPR_geocodes_censustract.csv") #addresses that merged ok
+write.csv(miss_check2, file="~/Desktop/EPR_geocodes_nocensustract.csv") #addresses that needed to be handmerged
 
+censusbyhand <- read.csv("~/Desktop/EPR_geocodes_censusbyhand.csv")[,2:29] #import hand-merged addresses
 
+geocodest <- rbind(geocodest, censusbyhand) #add hand-merged addresses to the rest
 #### Air Pollution ####
 
-caces <- read.csv("~/Documents/caces_tracts.csv")
+caces <- read.csv("~/Documents/caces_tracts.csv") #from all US states and territories
 
-
+# double check the names
 names(caces) <- c("fips" ,  "pollutant" , "year" , "pred_wght"  ,"state_abbr" ,"latitude" ,  "longitude"       )
 
-
+#make a simpler dataframe to connect to the addresses
 cacesx <- unique(subset(caces, select=c("fips","state_abbr","latitude","longitude")))
 
+#convert to spatial
 caces2 <- st_as_sf(cacesx, coords = c('longitude','latitude'), crs ="+proj=longlat +datum=NAD83 +no_defs")
 
 caces2 <- sf:::as_Spatial(caces2)
-states <- c("AL","AK","AZ","AR","CA", "CO", "CT", "DE", "FL","GA","HI", "ID","IL","IN","IA", "KS","KY","LA","ME","MD","MA","MI",
-            "MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX", "UT","VT", "VA","WA","WV","WI","WY","DC")
-cacest <- NULL
+#didn't end up using this vector
+#states <- c("AL","AK","AZ","AR","CA", "CO", "CT", "DE", "FL","GA","HI", "ID","IL","IN","IA", "KS","KY","LA","ME","MD","MA","MI",
+ #           "MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX", "UT","VT", "VA","WA","WV","WI","WY","DC")
+cacest <- NULL #empty file to store results
 for (i in 1:55){
   name1 <- paste0("~/Downloads/censustracts/",folders1[i])
   print(name1)
   censustract <- rgdal::readOGR(dsn=name1)
- # censustract <- spTransform(censustract, CRS("+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs"))
+ # censustract <- spTransform(censustract, CRS("+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs")) #don't need this
   print(proj4string(censustract))
   print(proj4string(caces2))
-  censustract2 <- raster:::extract(censustract, caces2)
+  censustract2 <- raster:::extract(censustract, caces2) #works better than over. 
   #censustract2 <- over(caces2,censustract)
   caces2@data$STATEFP <- censustract2$STATEFP
   caces2@data$COUNTYFP <- censustract2$COUNTYFP
@@ -124,12 +133,9 @@ for (i in 1:55){
   cacest <- rbind(cacest, caces2x2)
 }
 
-cacest2 <- subset(cacest, !is.na(cacest$NAME))
+cacest2 <- subset(cacest, !is.na(cacest$NAME)) # remove excess values
 
-
-##check data types between the variables. , dplyr: join functions (left_join - keep all in x, match y).
-## email Nat and Farida for more advise about geospatial joins in R
-
+#make dataframe
 
 
 caces <- as.data.frame(caces)
@@ -144,7 +150,7 @@ caces$pollutant <- as.factor(caces$pollutant)
 caces$state_abbr <- as.factor(caces$state_abbr)
 
 table(caces$state_abbr)
-
+#empty list for loop
 caces_list <- list()
 
 
@@ -153,28 +159,46 @@ names(cacest2)
 names(geocodest)
 
  for (i in 1:6){
-  name <- paste('item:', levels(caces$pollutant)[i],sep='')
+   #name for each dataset
+  name <- paste('censtrc_', levels(caces$pollutant)[i],sep='')
+  #subset by pollutant type
   item <- as.data.frame(subset(caces, caces$pollutant == levels(caces$pollutant)[i]))
+  #merge pollutant with the caces and census tracts
   item2 <- merge(item, cacest2, by.x=c("fips", "state_abbr"), by.y=c("fips", "state_abbr"), all.y=T)
+  #merge caces in census tracts with addresses in census tracts
   item3 <- merge(geocodest,item2, by.x=c("STATEFP" , "COUNTYFP","TRACTCE","GEOID", "NAME" ,"NAMELSAD" , "MTFCC","FUNCSTAT", "ALAND", "AWATER", "INTPTLAT"), 
                  by.y=c("STATEFP" , "COUNTYFP","TRACTCE","GEOID", "NAME" ,"NAMELSAD" , "MTFCC","FUNCSTAT", "ALAND", "AWATER", "INTPTLAT"),all.x=T)
+  #remove excess addresses
   item4 <- unique(item3)
   library(dplyr)
+  #flip it so each location has a row (or at least each address by survey source)
   item5 <- item4 %>% group_by(fips) %>% 
     pivot_wider(names_from = year, values_from =  pred_wght)
-  caces_list[[name]] <- as.data.frame(item5)
+  item6 <- unique(item5)
+  #remove empty row
+  caces_list[[name]] <- as.data.frame(item6)[,1:49]
 }
 
+#write to csv file
 
+so2_census <- caces_list$censtrc_so2
+write.csv(so2_census, file ="~/Desktop/so2_geocoded.csv")
 
-names(item2)
+o3_census <- caces_list$censtrc_o3
+write.csv(o3_census, file ="~/Desktop/o3_geocoded.csv")
 
+pm10_census <- caces_list$censtrc_pm10
+write.csv(pm10_census, file ="~/Desktop/pm10_geocoded.csv")
 
-caces_value <- merge(caces, cacest2, by.x=c("fips","state_abbr"), by.y=c("fips",  "state_abbr"), all.x=T )
+pm25_census <- caces_list$censtrc_pm25
+write.csv(pm25_census, file ="~/Desktop/pm25_geocoded.csv")
 
-caces_geo <- merge(geocodest, caces, by.x=c("fips", "state_abbr"), by.y=c("fips","state_abbr"), all.x=T)
+no2_census <- caces_list$censtrc_no2
+write.csv(no2_census, file ="~/Desktop/no2_geocoded.csv")
 
-unique(geocodest$state_abbr)
+co_census <- caces_list$censtrc_co
+write.csv(co_census, file ="~/Desktop/co_geocoded.csv")
+
 
 
 
