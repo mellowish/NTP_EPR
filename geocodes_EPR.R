@@ -24,7 +24,7 @@ geocodes$latitude <- as.numeric(ifelse(is.na(geocodes$state), NA, geocodes$geo_l
 geocodes$longitude<- as.numeric(ifelse(is.na(geocodes$state), NA, geocodes$geo_longitude))
 geocodes$location <- paste0(geocodes$latitude, geocodes$longitude)
 check1 <- unique(geocodes$location)
-geocodes$check <- ifelse(geocodes$location %in% check1, 1, 0)
+#geocodes$check <- ifelse(geocodes$location %in% check1, 1, 0)
 library(rgdal)
 library(sp)
 library(sf)
@@ -177,30 +177,53 @@ names(geocodest)
   item6 <- unique(item5)
   #remove empty row
   caces_list[[name]] <- as.data.frame(item6)[,1:49]
-}
+ }
+
 
 #write to csv file
 
+col_order <- c("STATEFP", "COUNTYFP" , "TRACTCE" ,"GEOID",                
+               "NAME", "NAMELSAD","MTFCC" ,"FUNCSTAT" ,            
+               "ALAND" ,"AWATER","INTPTLAT" ,"epr_number" ,          
+               "geo_study_event" , "geo_date_collected" , "geo_is_po_box_derived", "geo_address"  ,        
+               "geo_city" ,"geo_state", "geo_zip_code" ,"geo_territory"    ,    
+               "geo_country","geo_longitude","geo_latitude", "geo_geocode_quality"  ,
+               "state" , "country" ,"location" ,           
+               "fips" , "state_abbr" , "pollutant" ,"latitude"  ,           
+               "longitude" , "2000",  "2001", "2002" ,                
+               "2003", "2004" ,  "2005" , "2006"  ,               
+               "2007","2008", "2009", "2010" ,                
+               "2011","2012", "2013", "2014",                 
+               "2015" )
 so2_census <- caces_list$censtrc_so2
-write.csv(so2_census, file ="~/Desktop/so2_geocoded.csv")
+so2_census2 <- so2_census[, col_order]
+write.csv(so2_census2, file ="~/Desktop/so2_geocoded.csv")
 
 o3_census <- caces_list$censtrc_o3
-write.csv(o3_census, file ="~/Desktop/o3_geocoded.csv")
+o3_census2 <- o3_census[, col_order]
+write.csv(o3_census2, file ="~/Desktop/o3_geocoded.csv")
 
 pm10_census <- caces_list$censtrc_pm10
-write.csv(pm10_census, file ="~/Desktop/pm10_geocoded.csv")
+pm10_census2 <- pm10_census[, col_order]
+write.csv(pm10_census2, file ="~/Desktop/pm10_geocoded.csv")
 
 pm25_census <- caces_list$censtrc_pm25
-write.csv(pm25_census, file ="~/Desktop/pm25_geocoded.csv")
+pm25_census2 <- pm25_census[, col_order]
+write.csv(pm25_census2, file ="~/Desktop/pm25_geocoded.csv")
 
 no2_census <- caces_list$censtrc_no2
-write.csv(no2_census, file ="~/Desktop/no2_geocoded.csv")
+no2_census2 <- no2_census[, col_order]
+write.csv(no2_census2, file ="~/Desktop/no2_geocoded.csv")
 
 co_census <- caces_list$censtrc_co
-write.csv(co_census, file ="~/Desktop/co_geocoded.csv")
+co_census2 <- co_census[, col_order]
+write.csv(co_census2, file ="~/Desktop/co_geocoded.csv")
 
 
 
+head(co_census2)
+
+levels(as.factor(co_census$geo_geocode_quality))
 
 
 library(tidycensus)
